@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# 数据库与评测产物都是可再生的，不入库
+data/**/*.db
+data/cache/
+runs/
+reports/
