@@ -23,6 +23,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BIRD_DIR = PROJECT_ROOT / "data" / "bird"
 QUESTIONS_PATH = BIRD_DIR / "mini_dev_sqlite.jsonl"
 DATABASES_DIR = BIRD_DIR / "databases"
+# check_bird.py 生成的坏题清单：这些题的 gold SQL 在库上跑不通或为空
+INVALID_PATH = BIRD_DIR / "invalid_ids.json"
 
 
 class BirdDataMissing(RuntimeError):
@@ -33,6 +35,15 @@ def database_path(db_id: str, databases_dir: Path = DATABASES_DIR) -> Path:
     return databases_dir / db_id / f"{db_id}.sqlite"
 
 
+def invalid_ids(path: Path | None = None) -> set[str]:
+    # 默认值在调用时解析，方便测试替换 INVALID_PATH
+    path = path or INVALID_PATH
+    if not path.exists():
+        return set()
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return {f"bird-{item['question_id']}" for item in payload.get("invalid", [])}
+
+
 def load_bird_cases(
     *,
     questions_path: Path = QUESTIONS_PATH,
@@ -41,14 +52,17 @@ def load_bird_cases(
     db_id: str | None = None,
     difficulty: str | None = None,
     skip_missing: bool = True,
+    include_invalid: bool = False,
 ) -> list[Case]:
     if not questions_path.exists():
         raise BirdDataMissing(
             f"找不到 {questions_path}，先运行：python scripts/fetch_bird.py --list"
         )
 
+    quarantined = set() if include_invalid else invalid_ids()
     cases: list[Case] = []
     missing = 0
+    skipped_invalid = 0
     for line in questions_path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
@@ -56,6 +70,11 @@ def load_bird_cases(
         if db_id and raw["db_id"] != db_id:
             continue
         if difficulty and raw.get("difficulty") != difficulty:
+            continue
+
+        case_id = f"bird-{raw['question_id']}"
+        if case_id in quarantined:
+            skipped_invalid += 1
             continue
 
         path = database_path(raw["db_id"], databases_dir)
@@ -66,7 +85,7 @@ def load_bird_cases(
 
         cases.append(
             Case(
-                id=f"bird-{raw['question_id']}",
+                id=case_id,
                 question=raw["question"],
                 gold_sql=raw["SQL"],
                 ordered=False,  # BIRD 官方口径：无序比较
@@ -77,6 +96,8 @@ def load_bird_cases(
             )
         )
 
+    if skipped_invalid:
+        print(f"[隔离] 跳过 {skipped_invalid} 道坏题（gold SQL 跑不通/为空，见 scripts/check_bird.py）")
     if skip_missing and missing:
         print(f"[警告] 有 {missing} 题的数据库没下载，已跳过；跑 fetch_bird.py 补齐")
     if not cases:

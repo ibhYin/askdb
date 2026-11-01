@@ -3,10 +3,11 @@
     python scripts/fetch_bird.py --list          # 看题目涉及哪些库
     python scripts/fetch_bird.py --questions-only
     python scripts/fetch_bird.py --db toxicology # 只解压一个库
-    python scripts/fetch_bird.py                 # 全部（约 9GB 下载，可断点续传）
+    python scripts/fetch_bird.py                 # 全部（约 350MB，可断点续传）
 
-为什么用官方 zip 而不是 Docker 镜像：镜像单库约 800MB（含整套运行时），
-而 zip 里只有数据库本体；同一个 zip 还能覆盖以后要扩展的库。
+数据库来自官方 dev.zip（约 350MB，11 个库）。mini_dev 的题目就落在 dev 库上——
+train.zip（9GB / 69 个库）里没有这些 db_id，别下错了。
+Docker 镜像就不用考虑了：单库约 800MB，含整套运行时。
 """
 
 from __future__ import annotations
@@ -24,14 +25,16 @@ from pathlib import Path
 QUESTIONS_URL = (
     "https://huggingface.co/datasets/birdsql/bird_mini_dev/resolve/main/data/mini_dev_sqlite.jsonl"
 )
-ARCHIVE_URL = "https://bird-bench.oss-cn-beijing.aliyuncs.com/train.zip"
+ARCHIVE_URL = "https://bird-bench.oss-cn-beijing.aliyuncs.com/dev.zip"
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 BIRD_DIR = PROJECT_ROOT / "data" / "bird"
 CACHE_DIR = PROJECT_ROOT / "data" / "cache"
 DATABASES_DIR = BIRD_DIR / "databases"
 QUESTIONS_PATH = BIRD_DIR / "mini_dev_sqlite.jsonl"
-ARCHIVE_PATH = CACHE_DIR / "bird-train.zip"
+ARCHIVE_PATH = CACHE_DIR / "bird-dev.zip"
+# 官方归档是套娃：dev.zip 里面还有一层 dev_databases.zip
+INNER_ARCHIVE_PATH = CACHE_DIR / "bird-dev-databases.zip"
 
 
 def _open(url: str, *, resume_from: int = 0):
@@ -59,7 +62,7 @@ def download_archive(force: bool = False) -> Path:
     if ARCHIVE_PATH.exists():
         print(f"发现已下载的归档：{ARCHIVE_PATH}（{ARCHIVE_PATH.stat().st_size / 1e9:.2f} GB），继续续传")
     else:
-        print(f"下载数据库归档（约 9GB，可中断后重跑续传）：{ARCHIVE_URL}")
+        print(f"下载数据库归档（约 350MB，可中断后重跑续传）：{ARCHIVE_URL}")
 
     offset = ARCHIVE_PATH.stat().st_size if ARCHIVE_PATH.exists() else 0
     try:
@@ -82,8 +85,8 @@ def download_archive(force: bool = False) -> Path:
                 break
             target.write(chunk)
             written += len(chunk)
-            if total and written % (200 * 1024 * 1024) < 1024 * 1024:
-                print(f"  {written / 1e9:.2f} / {total / 1e9:.2f} GB", flush=True)
+            if total and written % (50 * 1024 * 1024) < 1024 * 1024:
+                print(f"  {written / 1e6:.0f} / {total / 1e6:.0f} MB", flush=True)
     print(f"归档就绪：{ARCHIVE_PATH}（{ARCHIVE_PATH.stat().st_size / 1e9:.2f} GB）")
     return ARCHIVE_PATH
 
@@ -105,12 +108,28 @@ def _sqlite_members(archive: zipfile.ZipFile, db_id: str) -> list[zipfile.ZipInf
         info
         for info in archive.infolist()
         if info.filename.endswith(".sqlite") and f"/{db_id}/" in info.filename
+        and not info.filename.startswith("__MACOSX")
     ]
+
+
+def open_databases_archive(archive_path: Path = ARCHIVE_PATH) -> zipfile.ZipFile:
+    """官方 zip 是套娃结构，返回真正装着各库的那一层。"""
+    with zipfile.ZipFile(archive_path) as outer:
+        nested = [i for i in outer.infolist() if i.filename.endswith("databases.zip")]
+        if not nested:
+            return zipfile.ZipFile(archive_path)  # 扁平结构，直接用
+
+        member = nested[0]
+        if not (INNER_ARCHIVE_PATH.exists() and INNER_ARCHIVE_PATH.stat().st_size == member.file_size):
+            print(f"  解开内层归档 {member.filename}（{member.file_size / 1e9:.2f} GB）…", flush=True)
+            with outer.open(member) as source, INNER_ARCHIVE_PATH.open("wb") as out:
+                shutil.copyfileobj(source, out, length=8 * 1024 * 1024)
+    return zipfile.ZipFile(INNER_ARCHIVE_PATH)
 
 
 def extract_databases(db_ids: list[str], archive_path: Path = ARCHIVE_PATH) -> list[str]:
     missing: list[str] = []
-    with zipfile.ZipFile(archive_path) as archive:
+    with open_databases_archive(archive_path) as archive:
         for db_id in db_ids:
             members = _sqlite_members(archive, db_id)
             if not members:
@@ -176,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         archive.unlink(missing_ok=True)
         print(f"\n已删除归档 {archive}")
     else:
-        print(f"\n归档保留在 {archive}（加 --delete-archive 可删，约 9GB）")
+        print(f"\n归档保留在 {archive}（加 --delete-archive 可删）")
     return 0
 
 

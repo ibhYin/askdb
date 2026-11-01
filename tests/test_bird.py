@@ -106,3 +106,23 @@ def test_multi_database_self_check_is_100(bird_dir):
     cases = load_bird_cases(questions_path=questions, databases_dir=dbs)
     report = run_self_check(cases, dbs)
     assert report.metrics["exact_match"] == 1.0
+
+
+def test_invalid_questions_are_quarantined_by_default(bird_dir, monkeypatch):
+    from askdb.eval import bird
+
+    questions, dbs = bird_dir
+    invalid_file = questions.parent / "invalid_ids.json"
+    invalid_file.write_text(
+        json.dumps({"checked": 2, "invalid": [{"question_id": 1, "db_id": "clinic"}]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bird, "INVALID_PATH", invalid_file)
+
+    cases = bird.load_bird_cases(questions_path=questions, databases_dir=dbs)
+    assert [c.id for c in cases] == ["bird-0"]
+
+    kept = bird.load_bird_cases(
+        questions_path=questions, databases_dir=dbs, include_invalid=True
+    )
+    assert [c.id for c in kept] == ["bird-0", "bird-1"]
