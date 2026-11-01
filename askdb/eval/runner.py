@@ -95,11 +95,17 @@ def _schema_for(db_path: str) -> str:
         conn.close()
 
 
+GOLD_TIMEOUT_SECONDS = 60.0
+
+
 def gold_rows_of(case: Case, db_path: str | Path) -> list[tuple]:
+    """gold 查询给足超时：它是评分尺子，不该被 agent 的 10s 限制牵连。"""
     db_path = _db_for(case, db_path)
     conn = dbmod.open_db(db_path)
     try:
-        result = dbmod.run_query(conn, case.gold_sql, max_rows=10_000)
+        result = dbmod.run_query(
+            conn, case.gold_sql, max_rows=EVAL_MAX_ROWS, timeout_seconds=GOLD_TIMEOUT_SECONDS
+        )
     finally:
         conn.close()
     if not result.ok:
@@ -211,7 +217,17 @@ def run_eval(
     llm = llm or build_llm(settings)
     started_at = datetime.now()
 
-    gold_rows = {case.id: gold_rows_of(case, db_path) for case in cases}
+    # gold 跑不出来的题直接剔除：拿坏尺子量模型，分数没有意义
+    gold_rows: dict[str, list[tuple]] = {}
+    usable: list[Case] = []
+    for case in cases:
+        try:
+            gold_rows[case.id] = gold_rows_of(case, db_path)
+            usable.append(case)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[跳过] {case.id} gold SQL 不可用：{exc}")
+    cases = usable
+
     results = [run_case(case, db_path, llm, settings, gold_rows[case.id]) for case in cases]
 
     report = Report(
