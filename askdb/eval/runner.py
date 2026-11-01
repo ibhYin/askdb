@@ -187,7 +187,8 @@ def run_eval(
     results = [run_case(case, db_path, llm, settings, gold_rows[case.id]) for case in cases]
 
     report = Report(
-        run_id=f"{started_at:%Y%m%d-%H%M%S}-{settings.provider}",
+        # 带微秒与数据集名：同一秒内跑多次也不会互相覆盖（覆盖 = 丢失基线）
+        run_id=f"{started_at:%Y%m%d-%H%M%S-%f}-{dataset_name}-{settings.provider}",
         started_at=started_at.isoformat(timespec="seconds"),
         provider=settings.provider,
         model=(settings.model or "mock") if settings.provider != "mock" else "mock",
@@ -218,6 +219,11 @@ def save_report(report: Report, out_dir: str | Path | None = None) -> Path:
     out_dir = Path(out_dir) if out_dir else RUNS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{report.run_id}.json"
+    # 绝不覆盖已有报告：宁可多一个文件，也不能悄悄丢掉一次基线
+    suffix = 1
+    while path.exists():
+        suffix += 1
+        path = out_dir / f"{report.run_id}-{suffix}.json"
     path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
     return path
 

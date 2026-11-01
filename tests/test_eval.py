@@ -58,3 +58,12 @@ def test_classify_categories():
     assert classify(_run_with(empty), correct=False) == "empty_result"
     assert classify(_run_with(broken), correct=False) == "sql_error"
     assert classify(_run_with(None, sql=None), correct=False) == "no_sql"
+
+
+def test_reports_never_overwrite_each_other(tmp_path):
+    """同一秒内跑两次，必须是两个文件：覆盖等于静默丢掉一次基线。"""
+    cases = load_cases(QUESTIONS, limit=2)
+    first = save_report(run_self_check(cases, DB_PATH), tmp_path)
+    second = save_report(run_self_check(cases, DB_PATH), tmp_path)
+    assert first != second
+    assert len(list(tmp_path.glob("*.json"))) == 2
