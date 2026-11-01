@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .. import db as dbmod
-from ..agent import AgentRun, run_agent
+from ..agent import AgentRun, build_messages, run_agent
 from ..config import RUNS_DIR, Settings, get_settings
 from ..llm import BaseLLM, MockLLM, build_llm
 from .dataset import Case
@@ -234,7 +234,11 @@ def run_self_check(cases: list[Case], db_path: str | Path, settings: Settings | 
     此时任何模型分数都不可信。
     """
     settings = settings or get_settings()
-    by_question = {case.question: case.gold_sql for case in cases}
+    # 用真实的 user 消息做键：evidence 会被拼进去，直接按 question 查会漏
+    by_question = {
+        build_messages(case.question, "", case.evidence)[-1].content: case.gold_sql
+        for case in cases
+    }
     llm = MockLLM(lambda payload: by_question.get(payload[-1]["content"], "SELECT 1"))
     return run_eval(cases, db_path, llm=llm, settings=settings, dataset_name="self-check")
 

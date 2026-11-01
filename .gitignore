@@ -11,3 +11,6 @@ data/**/*.db
 data/cache/
 runs/
 reports/
+
+# BIRD 数据（题目 + 数据库，体积大，由 fetch_bird.py 生成）
+data/bird/

@@ -6,6 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from .bird import load_bird_cases, summarize
 from .dataset import load_cases
 from .runner import format_summary, run_eval, run_self_check, save_report
 
@@ -28,6 +29,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="用 gold SQL 冒充模型输出，验证评测器本身（必须 100%%）",
     )
+    parser.add_argument("--bird", action="store_true", help="用 BIRD mini_dev 评测集")
+    parser.add_argument("--db-id", default=None, help="只跑 BIRD 中某个库，如 toxicology")
+    parser.add_argument(
+        "--bird-difficulty",
+        default=None,
+        choices=["simple", "moderate", "challenging"],
+        help="只跑 BIRD 某档难度",
+    )
     parser.add_argument("--out", default=None, help="报告目录，默认 runs/")
     parser.add_argument("--no-save", action="store_true", help="不写报告文件")
     return parser
@@ -36,12 +45,24 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     ids = [i.strip() for i in args.ids.split(",")] if args.ids else None
-    cases = load_cases(args.dataset, limit=args.limit, ids=ids)
+    if args.bird:
+        cases = load_bird_cases(
+            limit=args.limit, db_id=args.db_id, difficulty=args.bird_difficulty
+        )
+        print(summarize(cases))
+        dataset_name = "bird-mini-dev"
+    else:
+        cases = load_cases(args.dataset, limit=args.limit, ids=ids)
+        dataset_name = "sample"
     if not cases:
         print("评测集为空，检查 --dataset / --limit / --ids", file=sys.stderr)
         return 2
 
-    report = run_self_check(cases, args.db) if args.self_check else run_eval(cases, args.db)
+    report = (
+        run_self_check(cases, args.db)
+        if args.self_check
+        else run_eval(cases, args.db, dataset_name=dataset_name)
+    )
     print(format_summary(report))
 
     if args.self_check and report.metrics["exact_match"] < 1.0:
