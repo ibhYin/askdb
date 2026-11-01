@@ -16,6 +16,7 @@ import json
 import shutil
 import sqlite3
 import sys
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -61,7 +62,13 @@ def download_archive(force: bool = False) -> Path:
         print(f"下载数据库归档（约 9GB，可中断后重跑续传）：{ARCHIVE_URL}")
 
     offset = ARCHIVE_PATH.stat().st_size if ARCHIVE_PATH.exists() else 0
-    response = _open(ARCHIVE_URL, resume_from=offset)
+    try:
+        response = _open(ARCHIVE_URL, resume_from=offset)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 416:  # 从文件末尾之后开始要，说明已经下完了
+            print(f"归档已完整（{offset / 1e9:.2f} GB），跳过下载")
+            return ARCHIVE_PATH
+        raise
     if offset and getattr(response, "status", 200) != 206:
         print("服务端不支持断点续传，从头下载")
         offset = 0

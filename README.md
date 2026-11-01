@@ -6,6 +6,7 @@
 ## 现在能做什么
 
 ```bash
+make web                          # 打开 http://127.0.0.1:8000 直接提问
 python -m askdb.eval              # 跑一轮评测，报告存 runs/*.json
 python -m askdb.eval --self-check # 自检：gold SQL 冒充模型，必须 100%
 python -m askdb.eval --limit 5    # 只跑前 5 题
@@ -13,6 +14,23 @@ python -m askdb.eval.compare runs/A.json runs/B.json   # 两次评测的差异
 ```
 
 没有 API Key 也能跑——会自动使用 mock 模型，用于验证流水线本身。
+
+## Web 界面
+
+`make web` 之后打开 `http://127.0.0.1:8000`：输入中文问题，SQL、执行结果表、
+每轮耗时与 token 都会逐步推送到页面上。用的是 SSE，不是轮询。
+
+界面刻意做成"trace 优先"而不是"聊天优先"——这个项目要展示的是过程，
+不是让模型显得会说话。
+
+## BIRD 公开基准
+
+```bash
+python scripts/fetch_bird.py --list    # 看题目涉及哪 11 个库
+python scripts/fetch_bird.py           # 下载题目 + 数据库（约 9GB，可断点续传）
+python -m askdb.eval --bird --limit 100
+python -m askdb.eval --bird --db-id toxicology --bird-difficulty challenging
+```
 
 ## 设计取舍
 
@@ -33,8 +51,15 @@ python -m askdb.eval.compare runs/A.json runs/B.json   # 两次评测的差异
 
 ## 评测集
 
-当前 `data/sample/questions.jsonl`：24 条中文问题，覆盖 count / join / group_by /
-having / subquery / ratio / date_func，难度分三档。第 2 周接入 BIRD 100 题作为公开基线。
+两套：
+
+| 数据集 | 内容 | 用途 |
+|---|---|---|
+| `data/sample/questions.jsonl` | 24 条中文问题（自建电商库） | 跑通链路、中文演示；题目已饱和，不适合证明提升 |
+| BIRD mini_dev | 500 条英文问题，11 个真实业务库 | 公开基线，可与官方 leaderboard 对比 |
+
+官方 baseline（SQLite EX）：DeepSeek-V4.1-Flash 61.0%、GPT-6.1 Sol 88.0%——
+本项目用的正是前者，所以分数有直接参照。
 
 题目新增后先跑体检，坏题比没题更糟：
 
@@ -63,11 +88,14 @@ askdb/
 ├── db.py          # 只读执行、schema 抽取、结果比较
 ├── llm.py         # OpenAI 兼容客户端 + 离线 mock
 ├── config.py      # 配置（无 key 显式回落 mock）
+├── web.py         # FastAPI + SSE 接口
+├── web_static/    # 单文件前端
 └── eval/
     ├── dataset.py # 评测集加载
     ├── failure.py # 六类失败归因
     ├── runner.py  # 跑分、指标、报告落盘
-    └── compare.py # 两次评测对比
+    ├── compare.py # 两次评测对比
+    └── bird.py    # BIRD 多库评测集加载
 scripts/
 ├── build_sample_db.py  # 可复现的样例电商库
 └── check_questions.py  # 评测集体检
@@ -77,8 +105,9 @@ tests/                  # 34 个用例
 ## 路线图
 
 - [x] 第 1 周：只读执行器、Agent 循环、评测骨架、24 题样例集、对比报表
-- [ ] 第 2 周：BIRD 100 题，跑出第一个真实基线
+- [x] 第 2 周：BIRD 接入（题目 + 11 个库）、多库评测、跑出公开基线
 - [ ] 第 3 周：schema 检索（表/列召回）
 - [ ] 第 4 周：执行反馈自纠 + 结果合理性校验
 - [ ] 第 5 周：上下文裁剪、成本与延迟优化
-- [ ] 第 6 周：FastAPI + SSE 问数界面、Docker 部署
+- [x] 第 6 周：FastAPI + SSE 问数界面（提前完成）
+- [ ] 待办：Docker 部署、上下文裁剪与成本优化
