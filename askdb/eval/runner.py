@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import math
 import time
@@ -76,7 +77,22 @@ def _percentile(values: list[float], p: float) -> float:
     return ordered[low] + (ordered[high] - ordered[low]) * (k - low)
 
 
+def _db_for(case: Case, default: str | Path) -> str | Path:
+    return case.db_path or default
+
+
+@functools.lru_cache(maxsize=32)
+def _schema_for(db_path: str) -> str:
+    """同一个库只抽一次 schema：BIRD 一个库挂着几十道题，重复抽太浪费。"""
+    conn = dbmod.open_db(db_path)
+    try:
+        return dbmod.schema_text(conn)
+    finally:
+        conn.close()
+
+
 def gold_rows_of(case: Case, db_path: str | Path) -> list[tuple]:
+    db_path = _db_for(case, db_path)
     conn = dbmod.open_db(db_path)
     try:
         result = dbmod.run_query(conn, case.gold_sql, max_rows=10_000)
@@ -95,8 +111,16 @@ def run_case(
     gold_rows: list[tuple],
 ) -> CaseResult:
     started = time.perf_counter()
+    target_db = _db_for(case, db_path)
     try:
-        run: AgentRun = run_agent(case.question, db_path, llm=llm, settings=settings)
+        run: AgentRun = run_agent(
+            case.question,
+            target_db,
+            llm=llm,
+            settings=settings,
+            schema=_schema_for(str(Path(target_db).resolve())),
+            evidence=case.evidence,
+        )
         correct = run.ok and dbmod.results_equal(run.rows, gold_rows, ordered=case.ordered)
         category = classify(run, correct=correct)
         return CaseResult(

@@ -83,10 +83,14 @@ def extract_sql(text: str) -> str | None:
     return sql or None
 
 
-def build_messages(question: str, schema: str) -> list[Message]:
+def build_messages(question: str, schema: str, evidence: str = "") -> list[Message]:
+    """evidence 是数据集给出的业务知识提示（BIRD 的标准字段），不是从库里能查到的东西。"""
+    user = question
+    if evidence:
+        user = f"{question}\n\n参考信息：{evidence}"
     return [
         Message("system", f"{SYSTEM_PROMPT}\n\n数据库 schema：\n{schema}"),
-        Message("user", question),
+        Message("user", user),
     ]
 
 
@@ -97,13 +101,14 @@ def run_agent(
     llm: BaseLLM | None = None,
     settings: Settings | None = None,
     schema: str | None = None,
+    evidence: str = "",
 ) -> AgentRun:
     settings = settings or get_settings()
     llm = llm or build_llm(settings)
 
     conn = dbmod.open_db(db_path)
     schema = schema if schema is not None else dbmod.schema_text(conn)
-    messages = build_messages(question, schema)
+    messages = build_messages(question, schema, evidence)
 
     run = AgentRun(question=question)
     started = time.perf_counter()

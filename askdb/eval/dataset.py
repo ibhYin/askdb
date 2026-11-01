@@ -15,6 +15,10 @@ class Case:
     ordered: bool = False
     tags: tuple[str, ...] = ()
     difficulty: str = "medium"
+    # 多库评测集（如 BIRD）里每道题绑定自己的库；单库数据集留空即可
+    db_path: str | None = None
+    # BIRD 的 evidence 提示（外部业务知识），参与组 prompt
+    evidence: str = ""
 
     @property
     def key(self) -> str:
@@ -40,6 +44,8 @@ def load_cases(
                 ordered=bool(raw.get("ordered", False)),
                 tags=tuple(raw.get("tags", ())),
                 difficulty=raw.get("difficulty", "medium"),
+                db_path=raw.get("db_path"),
+                evidence=raw.get("evidence", ""),
             )
         )
     if ids:
