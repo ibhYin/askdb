@@ -218,6 +218,7 @@ def run_eval(
     started_at = datetime.now()
 
     # gold 跑不出来的题直接剔除：拿坏尺子量模型，分数没有意义
+    print(f"预计算 gold 结果：{len(cases)} 题", flush=True)
     gold_rows: dict[str, list[tuple]] = {}
     usable: list[Case] = []
     for case in cases:
@@ -228,7 +229,12 @@ def run_eval(
             print(f"[跳过] {case.id} gold SQL 不可用：{exc}")
     cases = usable
 
-    results = [run_case(case, db_path, llm, settings, gold_rows[case.id]) for case in cases]
+    print(f"开始评测（{len(cases)} 题，模型 {settings.model or 'mock'}）", flush=True)
+    results: list[CaseResult] = []
+    for index, case in enumerate(cases, 1):
+        results.append(run_case(case, db_path, llm, settings, gold_rows[case.id]))
+        if index % 25 == 0:
+            print(f"  … {index}/{len(cases)}", flush=True)
 
     report = Report(
         # 带微秒与数据集名：同一秒内跑多次也不会互相覆盖（覆盖 = 丢失基线）

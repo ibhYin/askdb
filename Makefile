@@ -9,6 +9,9 @@ help:
 	@echo "selfcheck  自检评测器（必须 100%）"
 	@echo "eval       跑一轮评测"
 	@echo "test       跑单元测试"
+	@echo "web        启动问数界面"
+	@echo "bird-data  下载 BIRD 题目与数据库"
+	@echo "bird-eval  跑 BIRD 评测"
 
 setup:
 	python3.13 -m venv .venv
@@ -35,3 +38,12 @@ compare:
 
 web:
 	$(PY) -m uvicorn askdb.web:app --reload --port 8000
+
+bird-data:
+	$(PY) scripts/fetch_bird.py
+
+bird-check:
+	$(PY) scripts/check_bird.py
+
+bird-eval:
+	$(PY) -m askdb.eval --bird
