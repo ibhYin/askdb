@@ -97,3 +97,32 @@ def test_llm_failure_is_reported_not_raised():
     assert not run.ok
     assert "网络不可用" in run.error
     assert classify(run, correct=False) == "llm_error"
+
+
+def test_stream_agent_emits_events_in_order():
+    from askdb.agent import stream_agent
+
+    events = list(
+        stream_agent(
+            "一共有多少个客户？",
+            DB_PATH,
+            llm=MockLLM("SELECT COUNT(*) FROM customers"),
+            settings=make_settings(),
+        )
+    )
+    assert [e["type"] for e in events] == ["step", "sql", "result", "finish"]
+    assert events[1]["sql"] == "SELECT COUNT(*) FROM customers"
+    assert events[2]["columns"] == ["COUNT(*)"]
+    assert events[2]["rows"] == [(120,)]
+    assert events[-1]["run"].rows == [(120,)]
+
+
+def test_stream_agent_reports_execution_error_then_retries():
+    from askdb.agent import stream_agent
+
+    llm = MockLLM(["SELECT nope FROM customers", "SELECT COUNT(*) FROM customers"])
+    events = list(stream_agent("一共有多少个客户？", DB_PATH, llm=llm, settings=make_settings()))
+    results = [e for e in events if e["type"] == "result"]
+    assert len(results) == 2
+    assert results[0]["error"]
+    assert results[1]["rows"] == [(120,)]

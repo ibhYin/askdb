@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass, field
+from typing import Iterator
 from pathlib import Path
 
 from . import db as dbmod
@@ -94,7 +95,7 @@ def build_messages(question: str, schema: str, evidence: str = "") -> list[Messa
     ]
 
 
-def run_agent(
+def stream_agent(
     question: str,
     db_path: str | Path,
     *,
@@ -102,7 +103,16 @@ def run_agent(
     settings: Settings | None = None,
     schema: str | None = None,
     evidence: str = "",
-) -> AgentRun:
+) -> Iterator[dict]:
+    """流式版本：每走一步就吐一个事件，Web 端直接转成 SSE。
+
+    事件类型：
+        step   一轮开始
+        sql    模型给出的 SQL（可能是 None，表示没解析出来）
+        result 执行结果（含列名、行、错误、耗时）
+        error  调用失败
+        finish 结束，携带完整 AgentRun（供评测/持久化）
+    """
     settings = settings or get_settings()
     llm = llm or build_llm(settings)
 
@@ -116,15 +126,19 @@ def run_agent(
 
     try:
         for index in range(1, settings.max_steps + 1):
+            yield {"type": "step", "index": index}
+
             try:
                 response = llm.complete(messages)
             except LLMError as exc:
                 run.error = str(exc)
+                yield {"type": "error", "message": run.error}
                 break
 
             sql = extract_sql(response.text)
             step = Step(index=index, sql=sql, response=response)
             run.steps.append(step)
+            yield {"type": "sql", "index": index, "sql": sql}
 
             if sql is None:
                 messages.append(Message("assistant", response.text))
@@ -141,6 +155,15 @@ def run_agent(
             )
             step.result = result
             messages.append(Message("assistant", response.text))
+            yield {
+                "type": "result",
+                "index": index,
+                "columns": result.columns,
+                "rows": result.rows,
+                "error": result.error,
+                "elapsed_ms": round(result.elapsed_ms, 1),
+                "truncated": result.truncated,
+            }
 
             if not result.ok:
                 messages.append(
@@ -173,4 +196,22 @@ def run_agent(
         conn.close()
 
     run.latency_ms = (time.perf_counter() - started) * 1000
-    return run
+    yield {"type": "finish", "run": run}
+
+
+def run_agent(
+    question: str,
+    db_path: str | Path,
+    *,
+    llm: BaseLLM | None = None,
+    settings: Settings | None = None,
+    schema: str | None = None,
+    evidence: str = "",
+) -> AgentRun:
+    """同步版本：把事件流跑完，返回最终结果（评测用）。"""
+    for event in stream_agent(
+        question, db_path, llm=llm, settings=settings, schema=schema, evidence=evidence
+    ):
+        if event["type"] == "finish":
+            return event["run"]
+    raise RuntimeError("agent 事件流异常结束：没有 finish 事件")
