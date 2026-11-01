@@ -38,14 +38,17 @@ CATEGORY_LABELS = {
 def classify(run: AgentRun, *, correct: bool) -> str:
     if correct:
         return "correct"
+    if not run.steps:
+        return "llm_error" if run.error else "no_sql"
+    if all(step.sql is None for step in run.steps):
+        # 模型全程没给过 SQL：问题在输出格式/提示，而不是 SQL 写错
+        return "llm_error" if run.error and not run.error.startswith("达到最大步数") else "no_sql"
     if run.error:
         if run.error.startswith("达到最大步数"):
             return "max_steps"
         return "llm_error"
 
-    last = run.steps[-1] if run.steps else None
-    if last is None or last.sql is None:
-        return "no_sql"
+    last = run.steps[-1]
     if last.result is None or not last.result.ok:
         return "sql_error"
     if not last.result.rows:
