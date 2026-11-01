@@ -31,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--bird", action="store_true", help="用 BIRD mini_dev 评测集")
     parser.add_argument("--db-id", default=None, help="只跑 BIRD 中某个库，如 toxicology")
+    parser.add_argument("--sample", type=int, default=None, help="BIRD 等距抽样 N 题")
     parser.add_argument(
         "--bird-difficulty",
         default=None,
@@ -47,7 +48,10 @@ def main(argv: list[str] | None = None) -> int:
     ids = [i.strip() for i in args.ids.split(",")] if args.ids else None
     if args.bird:
         cases = load_bird_cases(
-            limit=args.limit, db_id=args.db_id, difficulty=args.bird_difficulty
+            limit=args.limit,
+            sample=args.sample,
+            db_id=args.db_id,
+            difficulty=args.bird_difficulty,
         )
         print(summarize(cases))
         dataset_name = "bird-mini-dev"

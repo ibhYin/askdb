@@ -126,3 +126,19 @@ def test_invalid_questions_are_quarantined_by_default(bird_dir, monkeypatch):
         questions_path=questions, databases_dir=dbs, include_invalid=True
     )
     assert [c.id for c in kept] == ["bird-0", "bird-1"]
+
+
+def test_sample_takes_evenly_spaced_cases(tmp_path):
+    questions = tmp_path / "q.jsonl"
+    dbs = tmp_path / "databases"
+    _make_db(database_path("a", dbs), "t", 1)
+    _write_questions(
+        questions,
+        [
+            {"question_id": i, "db_id": "a", "question": f"q{i}", "evidence": "",
+             "SQL": "SELECT COUNT(*) FROM t", "difficulty": "simple"}
+            for i in range(9)
+        ],
+    )
+    cases = load_bird_cases(questions_path=questions, databases_dir=dbs, sample=3)
+    assert [c.id for c in cases] == ["bird-0", "bird-3", "bird-6"]

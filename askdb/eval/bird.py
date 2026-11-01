@@ -49,6 +49,7 @@ def load_bird_cases(
     questions_path: Path = QUESTIONS_PATH,
     databases_dir: Path = DATABASES_DIR,
     limit: int | None = None,
+    sample: int | None = None,
     db_id: str | None = None,
     difficulty: str | None = None,
     skip_missing: bool = True,
@@ -102,6 +103,10 @@ def load_bird_cases(
         print(f"[警告] 有 {missing} 题的数据库没下载，已跳过；跑 fetch_bird.py 补齐")
     if not cases:
         raise BirdDataMissing("没有可用的 BIRD 题目：检查 --db-id / --difficulty 或先下载数据库")
+    if sample and len(cases) > sample:
+        # 等距抽样：直接取前 N 题会集中在同一个库，失真
+        step = len(cases) / sample
+        cases = [cases[int(i * step)] for i in range(sample)]
     if limit:
         cases = cases[:limit]
     return cases
