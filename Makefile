@@ -32,3 +32,6 @@ test:
 compare:
 	@echo "用法：make compare A=runs/a.json B=runs/b.json"
 	$(PY) -m askdb.eval.compare $(A) $(B)
+
+web:
+	$(PY) -m uvicorn askdb.web:app --reload --port 8000

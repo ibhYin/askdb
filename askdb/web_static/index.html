@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>askdb · 自然语言问数</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+    background: #f6f6f8; color: #1d1d1f; height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+    background: #fff; border-bottom: 1px solid #e5e5e7;
+  }
+  header h1 { font-size: 16px; font-weight: 650; letter-spacing: .2px; }
+  header .sub { font-size: 12px; color: #86868b; }
+  select {
+    margin-left: auto; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 8px;
+    background: #fff; font-size: 13px; color: #1d1d1f;
+  }
+  main { flex: 1; overflow-y: auto; padding: 24px 20px 8px; }
+  .wrap { max-width: 880px; margin: 0 auto; }
+
+  .empty { text-align: center; color: #86868b; font-size: 14px; margin-top: 18vh; line-height: 2; }
+  .empty b { color: #1d1d1f; font-size: 18px; display: block; margin-bottom: 6px; }
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
+  .examples button {
+    padding: 7px 12px; border: 1px solid #e5e5e7; border-radius: 999px; background: #fff;
+    font-size: 13px; color: #4b5563; cursor: pointer;
+  }
+  .examples button:hover { border-color: #2563eb; color: #2563eb; }
+
+  .turn { margin-bottom: 26px; }
+  .q { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+  .q .bubble {
+    max-width: 74%; background: #2563eb; color: #fff; padding: 9px 14px;
+    border-radius: 14px 14px 4px 14px; font-size: 14px; line-height: 1.6;
+  }
+  .trace { border-left: 2px solid #e5e5e7; padding-left: 14px; }
+  .step { margin-bottom: 10px; }
+  .step-head { font-size: 12px; color: #86868b; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; }
+  .pill { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: #eef2ff; color: #4338ca; }
+  .pill.err { background: #fef2f2; color: #b91c1c; }
+  .pill.ok { background: #ecfdf5; color: #047857; }
+  pre.sql {
+    background: #fff; border: 1px solid #e5e5e7; border-radius: 10px; padding: 10px 12px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; line-height: 1.55;
+    white-space: pre-wrap; word-break: break-word; color: #111827;
+  }
+  pre.sql::selection { background: #bfdbfe; }
+  .result { margin-top: 6px; overflow-x: auto; border: 1px solid #e5e5e7; border-radius: 10px; background: #fff; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th, td { text-align: left; padding: 6px 10px; white-space: nowrap; }
+  th { background: #fafafa; color: #6b7280; font-weight: 500; border-bottom: 1px solid #e5e5e7; position: sticky; top: 0; }
+  tr + tr td { border-top: 1px solid #f3f4f6; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .note { font-size: 12px; color: #86868b; margin-top: 5px; }
+  .err-box { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+  .summary { font-size: 12px; color: #6b7280; margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .summary b { color: #111827; font-weight: 600; }
+  .cursor::after { content: "▍"; animation: blink 1s steps(2) infinite; color: #9ca3af; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  footer { background: #fff; border-top: 1px solid #e5e5e7; padding: 12px 20px 16px; }
+  .input-row { max-width: 880px; margin: 0 auto; display: flex; gap: 10px; }
+  input[type=text] {
+    flex: 1; padding: 11px 14px; border: 1px solid #d1d5db; border-radius: 10px;
+    font-size: 14px; outline: none;
+  }
+  input[type=text]:focus { border-color: #2563eb; }
+  button.send {
+    padding: 11px 22px; border: none; border-radius: 10px; background: #2563eb;
+    color: #fff; font-size: 14px; cursor: pointer;
+  }
+  button.send:disabled { background: #93c5fd; cursor: not-allowed; }
+  .hint { max-width: 880px; margin: 6px auto 0; font-size: 12px; color: #9ca3af; }
+</style>
+</head>
+<body>
+<header>
+  <h1>askdb</h1>
+  <span class="sub">中文问题 → SQL → 执行 → 报错自纠</span>
+  <select id="db"></select>
+</header>
+
+<main><div class="wrap" id="feed">
+  <div class="empty" id="empty">
+    <b>问点什么</b>
+    库结构会自动喂给模型，SQL 和执行结果逐步显示在这里
+    <div class="examples" id="examples"></div>
+  </div>
+</div></main>
+
+<footer>
+  <div class="input-row">
+    <input id="q" type="text" placeholder="例如：每个城市的客户数量分别是多少？" autocomplete="off">
+    <button class="send" id="send">发送</button>
+  </div>
+  <div class="hint">SQL 只读执行，带超时与行数上限；最多 6 轮自纠</div>
+</footer>
+
+<script>
+const feed = document.getElementById("feed");
+const empty = document.getElementById("empty");
+const input = document.getElementById("q");
+const sendBtn = document.getElementById("send");
+const dbSelect = document.getElementById("db");
+
+const SAMPLE_EXAMPLES = [
+  "每个城市的客户数量分别是多少？",
+  "按销售额排名前 5 的商品名称和销售额分别是多少？",
+  "退款总金额占已完成订单销售额的百分比是多少？"
+];
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function isNum(v) { return typeof v === "number" || (typeof v === "string" && v.trim() !== "" && !isNaN(Number(v))); }
+
+function renderTable(columns, rows, truncated) {
+  const box = el("div", "result");
+  const table = el("table");
+  const thead = el("thead");
+  const hr = el("tr");
+  columns.forEach(c => hr.appendChild(el("th", null, c)));
+  thead.appendChild(hr);
+  table.appendChild(thead);
+  const tbody = el("tbody");
+  rows.forEach(row => {
+    const tr = el("tr");
+    row.forEach(v => {
+      const td = el("td", isNum(v) ? "num" : null, v === null ? "NULL" : String(v));
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  box.appendChild(table);
+  return box;
+}
+
+async function loadDatabases() {
+  const res = await fetch("/api/databases");
+  const data = await res.json();
+  dbSelect.innerHTML = "";
+  data.databases.forEach(d => {
+    const opt = el("option", null, d.label);
+    opt.value = d.id;
+    dbSelect.appendChild(opt);
+  });
+}
+
+function loadExamples() {
+  const box = document.getElementById("examples");
+  SAMPLE_EXAMPLES.forEach(text => {
+    const btn = el("button", null, text);
+    btn.onclick = () => { input.value = text; send(); };
+    box.appendChild(btn);
+  });
+}
+
+function buildTurn(question) {
+  const turn = el("div", "turn");
+  const q = el("div", "q");
+  q.appendChild(el("div", "bubble", question));
+  turn.appendChild(q);
+  const trace = el("div", "trace");
+  turn.appendChild(trace);
+  feed.appendChild(turn);
+  return trace;
+}
+
+async function send() {
+  const question = input.value.trim();
+  if (!question || sendBtn.disabled) return;
+  if (empty) empty.remove();
+
+  input.value = "";
+  sendBtn.disabled = true;
+  const trace = buildTurn(question);
+  const thinking = el("div", "step-head cursor", "思考中…");
+  trace.appendChild(thinking);
+
+  let currentStep = null;
+  let sqlBox = null;
+
+  const handle = (ev) => {
+    if (ev.type === "step") {
+      thinking.remove();
+      currentStep = el("div", "step");
+      currentStep.appendChild(el("div", "step-head", `第 ${ev.index} 轮`));
+      trace.appendChild(currentStep);
+    } else if (ev.type === "sql") {
+      if (!currentStep) return;
+      if (ev.sql) {
+        sqlBox = el("pre", "sql", ev.sql);
+        currentStep.appendChild(sqlBox);
+      } else {
+        currentStep.appendChild(el("div", "err-box", "模型没有输出可执行的 SQL，已要求重写"));
+      }
+    } else if (ev.type === "result") {
+      if (!currentStep) return;
+      if (ev.error) {
+        const box = el("div", "err-box", "执行失败：" + ev.error);
+        currentStep.appendChild(box);
+        const pill = el("span", "pill err", "报错 " + ev.elapsed_ms + "ms");
+        currentStep.querySelector(".step-head").appendChild(pill);
+      } else {
+        const head = currentStep.querySelector(".step-head");
+        head.appendChild(el("span", "pill ok", `${ev.rows.length} 行 · ${ev.elapsed_ms}ms`));
+        currentStep.appendChild(renderTable(ev.columns, ev.rows, ev.truncated));
+      }
+    } else if (ev.type === "error") {
+      currentStep ? currentStep.appendChild(el("div", "err-box", ev.message))
+                  : trace.appendChild(el("div", "err-box", ev.message));
+    } else if (ev.type === "finish") {
+      const summary = el("div", "summary");
+      summary.innerHTML =
+        `完成 · <b>${ev.steps}</b> 轮 · 返回 <b>${ev.row_count}</b> 行 · ` +
+        `<b>${ev.tokens}</b> tokens · <b>${ev.latency_ms}</b> ms`;
+      trace.appendChild(summary);
+    }
+  };
+
+  try {
+    const res = await fetch("/api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, db: dbSelect.value }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "请求失败");
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) >= 0) {
+        const chunk = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        const line = chunk.split("\n").find(l => l.startsWith("data: "));
+        if (line) handle(JSON.parse(line.slice(6)));
+      }
+    }
+  } catch (e) {
+    trace.appendChild(el("div", "err-box", e.message));
+  } finally {
+    thinking.remove();
+    sendBtn.disabled = false;
+    input.focus();
+    feed.scrollIntoView({ block: "end" });
+    feed.lastElementChild.scrollIntoView({ block: "end" });
+  }
+}
+
+sendBtn.onclick = send;
+input.addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+
+loadDatabases();
+loadExamples();
+input.focus();
+</script>
+</body>
+</html>
