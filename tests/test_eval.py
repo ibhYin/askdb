@@ -67,3 +67,19 @@ def test_reports_never_overwrite_each_other(tmp_path):
     second = save_report(run_self_check(cases, DB_PATH), tmp_path)
     assert first != second
     assert len(list(tmp_path.glob("*.json"))) == 2
+
+
+def test_large_result_sets_are_not_truncated_by_eval(tmp_path):
+    """回归：agent 默认只取 200 行，若评测沿用它，>200 行的题会被判错。"""
+    from askdb.eval.dataset import Case
+
+    case = Case(
+        id="big",
+        question="列出所有订单明细",
+        gold_sql="SELECT * FROM order_items",
+        ordered=False,
+        difficulty="easy",
+    )
+    report = run_self_check([case], DB_PATH)
+    assert report.metrics["exact_match"] == 1.0
+    assert report.cases[0].gold_rows > 200

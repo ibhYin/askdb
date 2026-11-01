@@ -10,7 +10,7 @@ import json
 import math
 import time
 from collections import Counter
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -64,6 +64,10 @@ class Report:
         data["mistakes"] = [c.to_dict() for c in self.mistakes]
         data["cases"] = [c.to_dict() for c in self.cases]
         return data
+
+
+# 评测时的行数上限：必须高于最大的 gold 结果集，否则截断会让"答对"判成"答错"。
+EVAL_MAX_ROWS = 10_000
 
 
 def _percentile(values: list[float], p: float) -> float:
@@ -203,7 +207,7 @@ def run_eval(
     settings: Settings | None = None,
     dataset_name: str = "sample",
 ) -> Report:
-    settings = settings or get_settings()
+    settings = replace(settings or get_settings(), max_rows=EVAL_MAX_ROWS)
     llm = llm or build_llm(settings)
     started_at = datetime.now()
 
@@ -233,7 +237,7 @@ def run_self_check(cases: list[Case], db_path: str | Path, settings: Settings | 
     这是整套评测的地基：如果自检不到 100%，说明题目或比较逻辑有问题，
     此时任何模型分数都不可信。
     """
-    settings = settings or get_settings()
+    settings = replace(settings or get_settings(), max_rows=EVAL_MAX_ROWS)
     # 用真实的 user 消息做键：evidence 会被拼进去，直接按 question 查会漏
     by_question = {
         build_messages(case.question, "", case.evidence)[-1].content: case.gold_sql
