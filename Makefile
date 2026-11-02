@@ -13,6 +13,8 @@ help:
 	@echo "web        启动问数界面"
 	@echo "bird-data  下载 BIRD 题目与数据库"
 	@echo "bird-eval  跑 BIRD 评测"
+	@echo "retrieval  离线测 schema 检索的表召回率"
+	@echo "mistakes   查看错题明细"
 
 setup:
 	python3.13 -m venv .venv
@@ -48,3 +50,9 @@ bird-check:
 
 bird-eval:
 	$(PY) -m askdb.eval --bird
+
+retrieval:
+	$(PY) scripts/eval_retrieval.py --top-k 6
+
+mistakes:
+	$(PY) scripts/show_mistakes.py --limit 10
