@@ -1,4 +1,5 @@
 PY := .venv/bin/python
+PORT ?= 8020
 
 .PHONY: help setup db check eval selfcheck test compare
 
@@ -37,7 +38,7 @@ compare:
 	$(PY) -m askdb.eval.compare $(A) $(B)
 
 web:
-	$(PY) -m uvicorn askdb.web:app --reload --port 8000
+	$(PY) -m uvicorn askdb.web:app --reload --port $(PORT)
 
 bird-data:
 	$(PY) scripts/fetch_bird.py

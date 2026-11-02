@@ -1,6 +1,6 @@
 """Web 界面：一个问题一个页面，SQL 与执行结果逐步流式展示。
 
-    uvicorn askdb.web:app --reload --port 8000
+    uvicorn askdb.web:app --reload --port 8020
 
 之所以把 SSE 做在一等公民的位置：这个项目卖的是"过程可见"，
 用户能看到模型写了什么 SQL、执行报了什么错、第几轮改对的。

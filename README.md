@@ -6,7 +6,7 @@
 ## 现在能做什么
 
 ```bash
-make web                          # 打开 http://127.0.0.1:8000 直接提问
+make web                          # 打开 http://127.0.0.1:8020 直接提问
 python -m askdb.eval              # 跑一轮评测，报告存 runs/*.json
 python -m askdb.eval --self-check # 自检：gold SQL 冒充模型，必须 100%
 python -m askdb.eval --limit 5    # 只跑前 5 题
@@ -17,7 +17,7 @@ python -m askdb.eval.compare runs/A.json runs/B.json   # 两次评测的差异
 
 ## Web 界面
 
-`make web` 之后打开 `http://127.0.0.1:8000`：输入中文问题，SQL、执行结果表、
+`make web` 之后打开 `http://127.0.0.1:8020`（端口被占就 `make web PORT=8030`）：输入中文问题，SQL、执行结果表、
 每轮耗时与 token 都会逐步推送到页面上。用的是 SSE，不是轮询。
 
 界面刻意做成"trace 优先"而不是"聊天优先"——这个项目要展示的是过程，
