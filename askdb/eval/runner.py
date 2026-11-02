@@ -54,6 +54,8 @@ class Report:
     model: str
     dataset: str
     n: int
+    # 跑分时的配置：没有它，两份报告无法判断差异来自哪里
+    config: dict = field(default_factory=dict)
     metrics: dict = field(default_factory=dict)
     by_difficulty: dict = field(default_factory=dict)
     by_tag: dict = field(default_factory=dict)
@@ -268,6 +270,15 @@ def run_eval(
         model=(settings.model or "mock") if settings.provider != "mock" else "mock",
         dataset=dataset_name,
         n=len(results),
+        config={
+            "prompt_version": settings.prompt_version,
+            "schema_retrieval": settings.schema_retrieval,
+            "schema_top_k": settings.schema_top_k if settings.schema_retrieval else None,
+            "schema_hops": settings.schema_hops if settings.schema_retrieval else None,
+            "max_steps": settings.max_steps,
+            "max_rows": settings.max_rows,
+            "temperature": settings.temperature,
+        },
         metrics=_aggregate(results),
         by_difficulty=_breakdown(results, lambda c: [c.difficulty]),
         by_tag=_breakdown(results, lambda c: c.tags or ["untagged"]),
@@ -310,6 +321,9 @@ def format_summary(report: Report) -> str:
     m = report.metrics
     lines = [
         f"数据集 {report.dataset}  |  provider={report.provider} model={report.model}",
+        "配置：" + "  ".join(
+            f"{k}={v}" for k, v in (report.config or {}).items() if v is not None
+        ),
         f"题目 {m['n']}  答对 {m['correct']}  "
         f"EX={m['exact_match']:.1%}（剔除调用失败 {m['exact_match_valid']:.1%}）",
         f"平均步数 {m['avg_steps']}  平均 token {m['avg_tokens']}  "

@@ -83,3 +83,17 @@ def test_large_result_sets_are_not_truncated_by_eval(tmp_path):
     report = run_self_check([case], DB_PATH)
     assert report.metrics["exact_match"] == 1.0
     assert report.cases[0].gold_rows > 200
+
+
+def test_report_records_the_config_it_ran_with():
+    """报告必须自解释：否则两份结果的差异说不清是哪个开关造成的。"""
+    from dataclasses import replace
+
+    from askdb.config import get_settings
+
+    cases = load_cases(QUESTIONS, limit=2)
+    settings = replace(get_settings(), prompt_version="v1", schema_retrieval=True, schema_top_k=4)
+    report = run_self_check(cases, DB_PATH, settings=settings)
+    assert report.config["prompt_version"] == "v1"
+    assert report.config["schema_retrieval"] is True
+    assert report.config["schema_top_k"] == 4
