@@ -12,8 +12,8 @@ def test_both_versions_registered():
 
 
 def test_unknown_version_falls_back_to_default():
-    assert get_prompt("v9") == get_prompt("v1")
-    assert get_prompt(None) == get_prompt("v1")
+    assert get_prompt("v9") == get_prompt()
+    assert get_prompt(None) == get_prompt("v2")
 
 
 def test_v2_keeps_v1_hard_rules():
