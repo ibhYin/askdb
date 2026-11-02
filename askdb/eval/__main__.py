@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import replace
 from pathlib import Path
 
+from ..config import get_settings
 from .bird import load_bird_cases, summarize
 from .dataset import load_cases
 from .runner import format_summary, run_eval, run_self_check, save_report
@@ -38,6 +40,13 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["simple", "moderate", "challenging"],
         help="只跑 BIRD 某档难度",
     )
+    parser.add_argument(
+        "--schema-retrieval",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="启用表级 schema 检索（只把相关表放进 prompt）",
+    )
+    parser.add_argument("--top-k", type=int, default=None, help="schema 检索保留的表数，默认 6")
     parser.add_argument("--out", default=None, help="报告目录，默认 runs/")
     parser.add_argument("--no-save", action="store_true", help="不写报告文件")
     return parser
@@ -62,10 +71,19 @@ def main(argv: list[str] | None = None) -> int:
         print("评测集为空，检查 --dataset / --limit / --ids", file=sys.stderr)
         return 2
 
+    settings = get_settings()
+    overrides = {}
+    if args.schema_retrieval is not None:
+        overrides["schema_retrieval"] = args.schema_retrieval
+    if args.top_k is not None:
+        overrides["schema_top_k"] = args.top_k
+    if overrides:
+        settings = replace(settings, **overrides)
+
     report = (
-        run_self_check(cases, args.db)
+        run_self_check(cases, args.db, settings=settings)
         if args.self_check
-        else run_eval(cases, args.db, dataset_name=dataset_name)
+        else run_eval(cases, args.db, settings=settings, dataset_name=dataset_name)
     )
     print(format_summary(report))
 

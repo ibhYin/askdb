@@ -28,6 +28,10 @@ class Settings:
     sql_timeout_seconds: float = 10.0
     max_rows: int = 200
     temperature: float = 0.0
+    # schema 检索：只把相关的几张表放进 prompt
+    schema_retrieval: bool = False
+    schema_top_k: int = 6
+    schema_hops: int = 1
 
     @property
     def provider(self) -> str:
@@ -68,4 +72,7 @@ def get_settings() -> Settings:
         sql_timeout_seconds=_env_float("SQL_TIMEOUT_SECONDS", 10.0),
         max_rows=_env_int("MAX_ROWS", 200),
         temperature=_env_float("TEMPERATURE", 0.0),
+        schema_retrieval=(os.getenv("SCHEMA_RETRIEVAL", "").strip().lower() in {"1", "true", "yes"}),
+        schema_top_k=_env_int("SCHEMA_TOP_K", 6),
+        schema_hops=_env_int("SCHEMA_HOPS", 1),
     )

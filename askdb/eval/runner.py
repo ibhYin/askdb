@@ -16,6 +16,7 @@ from pathlib import Path
 
 from .. import db as dbmod
 from ..agent import AgentRun, build_messages, run_agent
+from ..schema_index import retrieve_schema
 from ..config import RUNS_DIR, Settings, get_settings
 from ..llm import BaseLLM, MockLLM, build_llm
 from .dataset import Case
@@ -98,6 +99,28 @@ def _schema_for(db_path: str) -> str:
 GOLD_TIMEOUT_SECONDS = 60.0
 
 
+@functools.lru_cache(maxsize=256)
+def _retrieved_schema(db_path: str, question: str, evidence: str, top_k: int, hops: int) -> str:
+    """检索结果按题目缓存：同一题只算一次。"""
+    conn = dbmod.open_db(db_path)
+    try:
+        text, _ = retrieve_schema(
+            conn, question, evidence=evidence, db_path=db_path, top_k=top_k, hops=hops
+        )
+        return text
+    finally:
+        conn.close()
+
+
+def schema_for_case(case: Case, db_path: str | Path, settings: Settings) -> str:
+    target = str(Path(_db_for(case, db_path)).resolve())
+    if settings.schema_retrieval:
+        return _retrieved_schema(
+            target, case.question, case.evidence, settings.schema_top_k, settings.schema_hops
+        )
+    return _schema_for(target)
+
+
 def gold_rows_of(case: Case, db_path: str | Path) -> list[tuple]:
     """gold 查询给足超时：它是评分尺子，不该被 agent 的 10s 限制牵连。"""
     db_path = _db_for(case, db_path)
@@ -128,7 +151,7 @@ def run_case(
             target_db,
             llm=llm,
             settings=settings,
-            schema=_schema_for(str(Path(target_db).resolve())),
+            schema=schema_for_case(case, target_db, settings),
             evidence=case.evidence,
         )
         correct = run.ok and dbmod.results_equal(run.rows, gold_rows, ordered=case.ordered)

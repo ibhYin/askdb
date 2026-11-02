@@ -119,14 +119,26 @@ def run_query(
         conn.set_authorizer(None)
 
 
-def schema_text(conn: sqlite3.Connection, *, include_row_counts: bool = True) -> str:
-    """把库结构渲染成 CREATE TABLE 风格文本，附行数与外键——LLM 最容易读的格式。"""
-    tables = [
+def list_tables(conn: sqlite3.Connection) -> list[str]:
+    return [
         r[0]
         for r in conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
         )
     ]
+
+
+def schema_text(
+    conn: sqlite3.Connection,
+    *,
+    include_row_counts: bool = True,
+    tables: list[str] | None = None,
+) -> str:
+    """把库结构渲染成 CREATE TABLE 风格文本，附行数与外键——LLM 最容易读的格式。
+
+    tables 不为空时只渲染这些表（schema 检索用），顺序按传入顺序。
+    """
+    tables = tables if tables is not None else list_tables(conn)
     blocks: list[str] = []
     for table in tables:
         cols = conn.execute(f'PRAGMA table_info("{table}")').fetchall()
