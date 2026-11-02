@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 单元测试
+        run: python -m pytest -q
+
+      - name: 生成样例库
+        run: python scripts/build_sample_db.py
+
+      - name: 评测集体检
+        run: python scripts/check_questions.py
+
+      # 关键一步：评测器自检必须 100%
+      # 尺子不准时，后面所有分数都是噪音——所以把这条放进 CI 卡住
+      - name: 评测器自检（gold SQL 冒充模型，必须 100%）
+        run: python -m askdb.eval --self-check
+
+      - name: 无 API Key 也要能跑通全链路（mock provider）
+        run: python -m askdb.eval --limit 5
