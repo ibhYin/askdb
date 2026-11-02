@@ -128,11 +128,54 @@ def list_tables(conn: sqlite3.Connection) -> list[str]:
     ]
 
 
+def sample_column_values(
+    conn: sqlite3.Connection,
+    table: str,
+    column: str,
+    *,
+    limit: int = 4,
+    scan_rows: int = 400,
+    max_distinct: int = 6,
+    max_len: int = 24,
+) -> list[str]:
+    """取低基数列的取值样例；高基数列一律返回空。
+
+    两个坑都在这几行里：
+    - 用 LIMIT 而不是 SELECT DISTINCT：后者在大表上是全表扫描，几百 MB 的库会卡住
+    - 必须看基数：只看"前 N 个不同值"会把 CDSCode、District 这种高基数列也当枚举写进 prompt，
+      一条表就能让 schema 体积翻倍
+    """
+    try:
+        rows = conn.execute(
+            f'SELECT "{column}" FROM "{table}" WHERE "{column}" IS NOT NULL LIMIT {scan_rows}'
+        ).fetchall()
+    except sqlite3.Error:
+        return []
+
+    unique: list[str] = []
+    seen: set[str] = set()
+    for (value,) in rows:
+        if not isinstance(value, str):
+            return []  # 有非字符串就直接放弃：不是枚举列
+        text = value.strip()
+        if not text or len(text) > max_len:
+            return []
+        if text in seen:
+            continue
+        seen.add(text)
+        unique.append(text)
+        if len(unique) > max_distinct:
+            return []
+    return unique[:limit] if len(unique) >= 2 else []
+
+
 def schema_text(
     conn: sqlite3.Connection,
     *,
     include_row_counts: bool = True,
     tables: list[str] | None = None,
+    value_samples: int = 0,
+    max_value_annotations: int = 10,
 ) -> str:
     """把库结构渲染成 CREATE TABLE 风格文本，附行数与外键——LLM 最容易读的格式。
 
@@ -157,6 +200,20 @@ def schema_text(
 
         block = f"CREATE TABLE {table} (\n" + ",\n".join(lines) + "\n);"
         annotations: list[str] = []
+        if value_samples:
+            annotated = 0
+            for cid, name, col_type, *_ in cols:
+                if annotated >= max_value_annotations:
+                    break
+                # 只给低基数的文本列加样例：数字列与高基数列的信息量太低
+                if (col_type or "").upper() not in {"", "TEXT", "VARCHAR", "CHAR"}:
+                    continue
+                samples = sample_column_values(conn, table, name, limit=value_samples)
+                if len(samples) < 2:
+                    continue
+                rendered = ", ".join(f"'{v}'" for v in samples)
+                annotations.append(f"-- {table}.{name} 取值示例：{rendered}")
+                annotated += 1
         if include_row_counts:
             count = conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0]
             annotations.append(f"-- {table}: {count} 行")

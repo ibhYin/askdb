@@ -226,6 +226,7 @@ def retrieve_schema(
     top_k: int = 6,
     hops: int = 1,
     include_row_counts: bool = False,
+    value_samples: int = 0,
 ) -> tuple[str, list[str]]:
     """返回 (渲染好的 schema 文本, 选中的表名)。"""
     if db_path is not None:
@@ -236,6 +237,11 @@ def retrieve_schema(
     query = f"{question}\n{evidence}".strip()
     tables = index.search_with_neighbors(query, top_k=top_k, hops=hops)
     return (
-        dbmod.schema_text(conn, include_row_counts=include_row_counts, tables=tables),
+        dbmod.schema_text(
+            conn,
+            include_row_counts=include_row_counts,
+            tables=tables,
+            value_samples=value_samples,
+        ),
         tables,
     )

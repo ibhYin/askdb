@@ -33,6 +33,8 @@ class Settings:
     schema_top_k: int = 6
     schema_hops: int = 1
     prompt_version: str = "v2"
+    # 在 schema 里附带低基数列的取值样例（"Directly funded" 这类字面量最容易写错）
+    value_samples: int = 0
 
     @property
     def provider(self) -> str:
@@ -77,4 +79,5 @@ def get_settings() -> Settings:
         schema_top_k=_env_int("SCHEMA_TOP_K", 6),
         schema_hops=_env_int("SCHEMA_HOPS", 1),
         prompt_version=(os.getenv("PROMPT_VERSION") or "v2").strip().lower(),
+        value_samples=_env_int("VALUE_SAMPLES", 0),
     )

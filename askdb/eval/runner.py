@@ -89,11 +89,11 @@ def _db_for(case: Case, default: str | Path) -> str | Path:
 
 
 @functools.lru_cache(maxsize=32)
-def _schema_for(db_path: str) -> str:
+def _schema_for(db_path: str, value_samples: int = 0) -> str:
     """同一个库只抽一次 schema：BIRD 一个库挂着几十道题，重复抽太浪费。"""
     conn = dbmod.open_db(db_path)
     try:
-        return dbmod.schema_text(conn)
+        return dbmod.schema_text(conn, value_samples=value_samples)
     finally:
         conn.close()
 
@@ -102,12 +102,20 @@ GOLD_TIMEOUT_SECONDS = 60.0
 
 
 @functools.lru_cache(maxsize=256)
-def _retrieved_schema(db_path: str, question: str, evidence: str, top_k: int, hops: int) -> str:
+def _retrieved_schema(
+    db_path: str, question: str, evidence: str, top_k: int, hops: int, value_samples: int = 0
+) -> str:
     """检索结果按题目缓存：同一题只算一次。"""
     conn = dbmod.open_db(db_path)
     try:
         text, _ = retrieve_schema(
-            conn, question, evidence=evidence, db_path=db_path, top_k=top_k, hops=hops
+            conn,
+            question,
+            evidence=evidence,
+            db_path=db_path,
+            top_k=top_k,
+            hops=hops,
+            value_samples=value_samples,
         )
         return text
     finally:
@@ -118,9 +126,14 @@ def schema_for_case(case: Case, db_path: str | Path, settings: Settings) -> str:
     target = str(Path(_db_for(case, db_path)).resolve())
     if settings.schema_retrieval:
         return _retrieved_schema(
-            target, case.question, case.evidence, settings.schema_top_k, settings.schema_hops
+            target,
+            case.question,
+            case.evidence,
+            settings.schema_top_k,
+            settings.schema_hops,
+            settings.value_samples,
         )
-    return _schema_for(target)
+    return _schema_for(target, settings.value_samples)
 
 
 def gold_rows_of(case: Case, db_path: str | Path) -> list[tuple]:
@@ -278,6 +291,7 @@ def run_eval(
             "max_steps": settings.max_steps,
             "max_rows": settings.max_rows,
             "temperature": settings.temperature,
+            "value_samples": settings.value_samples,
         },
         metrics=_aggregate(results),
         by_difficulty=_breakdown(results, lambda c: [c.difficulty]),

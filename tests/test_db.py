@@ -78,3 +78,21 @@ def test_results_equal_tolerates_float_noise_and_ints_as_floats():
 def test_results_equal_counts_duplicates():
     assert not db.results_equal([(1,), (1,)], [(1,), (2,)])
     assert db.results_equal([(1,), (1,)], [(1,), (1,)])
+
+
+def test_value_samples_only_annotate_low_cardinality_columns(conn):
+    text = db.schema_text(conn, include_row_counts=False, tables=["customers"], value_samples=4)
+    # city / level 是枚举列
+    assert "customers.city 取值示例" in text
+    assert "customers.level 取值示例" in text
+    # name 是高基数列，不该出现
+    assert "customers.name 取值示例" not in text
+
+
+def test_value_samples_are_off_by_default(conn):
+    assert "取值示例" not in db.schema_text(conn)
+
+
+def test_high_cardinality_column_returns_no_samples(conn):
+    assert db.sample_column_values(conn, "customers", "name") == []
+    assert db.sample_column_values(conn, "customers", "city")
