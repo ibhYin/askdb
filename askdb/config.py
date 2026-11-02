@@ -32,7 +32,7 @@ class Settings:
     schema_retrieval: bool = False
     schema_top_k: int = 6
     schema_hops: int = 1
-    prompt_version: str = "v2"
+    prompt_version: str = "v1"
     # 在 schema 里附带低基数列的取值样例（"Directly funded" 这类字面量最容易写错）
     value_samples: int = 0
 
@@ -78,6 +78,6 @@ def get_settings() -> Settings:
         schema_retrieval=(os.getenv("SCHEMA_RETRIEVAL", "").strip().lower() in {"1", "true", "yes"}),
         schema_top_k=_env_int("SCHEMA_TOP_K", 6),
         schema_hops=_env_int("SCHEMA_HOPS", 1),
-        prompt_version=(os.getenv("PROMPT_VERSION") or "v2").strip().lower(),
+        prompt_version=(os.getenv("PROMPT_VERSION") or "v1").strip().lower(),
         value_samples=_env_int("VALUE_SAMPLES", 0),
     )

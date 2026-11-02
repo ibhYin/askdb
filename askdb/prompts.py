@@ -47,8 +47,11 @@ V2 = """你是严谨的数据分析助手，把用户问题翻译成 SQLite 查�
 8. 最终把 SQL 放在 ```sql 代码块中，思考过程可以放在代码块外。"""
 
 PROMPTS = {"v1": V1, "v2": V2}
-DEFAULT_VERSION = "v2"
+# 默认还是 v1：v2 在 150 题上只多 1.3pt，却多花 43% token，
+# 而且 60 题的同批对比里这点差异只有 1 道题（在噪声内）。
+# 保留 v2 供需要时切换——可切换比"猜哪个更好"重要。
+DEFAULT_VERSION = "v1"
 
 
 def get_prompt(version: str | None = None) -> str:
-    return PROMPTS.get((version or DEFAULT_VERSION).lower(), V2)
+    return PROMPTS.get((version or DEFAULT_VERSION).lower(), PROMPTS[DEFAULT_VERSION])

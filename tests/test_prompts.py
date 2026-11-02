@@ -11,9 +11,9 @@ def test_both_versions_registered():
     assert get_prompt("v1") != get_prompt("v2")
 
 
-def test_unknown_version_falls_back_to_latest():
-    assert get_prompt("v9") == get_prompt("v2")
-    assert get_prompt(None) == get_prompt("v2")
+def test_unknown_version_falls_back_to_default():
+    assert get_prompt("v9") == get_prompt("v1")
+    assert get_prompt(None) == get_prompt("v1")
 
 
 def test_v2_keeps_v1_hard_rules():
@@ -35,9 +35,9 @@ def test_build_messages_uses_requested_version():
     assert system.endswith("数据库 schema：\nschema")
 
 
-def test_build_messages_defaults_to_latest():
+def test_build_messages_defaults_to_default_version():
     system = build_messages("q", "schema")[0].content
-    assert system.startswith(get_prompt("v2"))
+    assert system.startswith(get_prompt())
 
 
 def test_evidence_is_appended_to_user_message():
