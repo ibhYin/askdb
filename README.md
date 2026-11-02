@@ -28,9 +28,22 @@ python -m askdb.eval.compare runs/A.json runs/B.json   # 两次评测的差异
 ```bash
 python scripts/fetch_bird.py --list    # 看题目涉及哪 11 个库
 python scripts/fetch_bird.py           # 下载题目 + 数据库（约 9GB，可断点续传）
-python -m askdb.eval --bird --limit 100
-python -m askdb.eval --bird --db-id toxicology --bird-difficulty challenging
+python -m askdb.eval --bird --limit 100            # 前 100 题（集中于同几个库）
+python -m askdb.eval --bird --sample 150           # 等距抽样，跨 11 个库
+python -m askdb.eval --bird --concurrency 3        # 并发跑分，结果顺序不变
+python -m askdb.eval --bird --schema-retrieval     # 只把相关表放进 prompt
+python -m askdb.eval --bird --prompt v2            # 换成"先想后写"的提示词
 ```
+
+### 已测过的消融（150 题抽样）
+
+| 配置 | EX | 平均 token |
+|---|---|---|
+| 基线 | 62.7% | 3062 |
+| + schema 检索 | **66.7%** | 3197 |
+| + 提示词 v2 | 64.0% | 4385 |
+
+检索是主力，提示词的性价比不高。详见 `docs/results.md` 与 `docs/decisions.md`。
 
 ## 设计取舍
 
