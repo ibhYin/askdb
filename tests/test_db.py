@@ -82,11 +82,11 @@ def test_results_equal_counts_duplicates():
 
 def test_value_samples_only_annotate_low_cardinality_columns(conn):
     text = db.schema_text(conn, include_row_counts=False, tables=["customers"], value_samples=4)
-    # level 只有 3 个取值，是真正的枚举列
+    # level / city 在抽样行内取值有限，给出来有助于写对过滤条件
     assert "customers.level 取值示例" in text
-    # name 是高基数列，city 有 8 个取值也不该被当成枚举
+    assert "customers.city 取值示例" in text
+    # name 高基数，绝不能当枚举写进 prompt
     assert "customers.name 取值示例" not in text
-    assert "customers.city 取值示例" not in text
 
 
 def test_value_samples_are_off_by_default(conn):
@@ -95,5 +95,5 @@ def test_value_samples_are_off_by_default(conn):
 
 def test_high_cardinality_column_returns_no_samples(conn):
     assert db.sample_column_values(conn, "customers", "name") == []
-    assert db.sample_column_values(conn, "customers", "city") == []
     assert db.sample_column_values(conn, "customers", "level") == ["普通", "银卡", "金卡"]
+    assert 2 <= len(db.sample_column_values(conn, "customers", "city")) <= 4

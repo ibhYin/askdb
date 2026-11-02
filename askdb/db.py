@@ -135,8 +135,8 @@ def sample_column_values(
     *,
     limit: int = 4,
     scan_rows: int = 400,
-    max_distinct: int = 6,
-    max_len: int = 24,
+    max_distinct: int = 10,
+    max_len: int = 32,
 ) -> list[str]:
     """取低基数列的取值样例；高基数列一律返回空。
 
@@ -144,6 +144,9 @@ def sample_column_values(
     - 用 LIMIT 而不是 SELECT DISTINCT：后者在大表上是全表扫描，几百 MB 的库会卡住
     - 必须看基数：只看"前 N 个不同值"会把 CDSCode、District 这种高基数列也当枚举写进 prompt，
       一条表就能让 schema 体积翻倍
+    - 门槛不能太严：DOCType 有 8 种取值（Unified / Elementary School District…），
+      正是修选表错误的关键提示词，卡在 6 就会漏掉
+    - 已知局限：只扫前若干行，罕见取值可能采不到
     """
     try:
         rows = conn.execute(
@@ -159,7 +162,8 @@ def sample_column_values(
             return []  # 有非字符串就直接放弃：不是枚举列
         text = value.strip()
         if not text or len(text) > max_len:
-            return []
+            # 单个超长值不该毁掉整列：跳过它，由后面的基数判断决定去留
+            continue
         if text in seen:
             continue
         seen.add(text)
