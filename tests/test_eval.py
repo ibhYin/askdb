@@ -97,3 +97,14 @@ def test_report_records_the_config_it_ran_with():
     assert report.config["prompt_version"] == "v1"
     assert report.config["schema_retrieval"] is True
     assert report.config["schema_top_k"] == 4
+
+
+def test_concurrent_run_preserves_case_order():
+    """并发必须不能打乱结果顺序：报告里题目顺序变了，人工比对就失效。"""
+    cases = load_cases(QUESTIONS, limit=6)
+    sequential = run_self_check(cases, DB_PATH)
+    from askdb.eval.runner import run_eval
+
+    concurrent = run_eval(cases, DB_PATH, concurrency=3, dataset_name="self-check")
+    assert [c.id for c in concurrent.cases] == [c.id for c in sequential.cases]
+    assert concurrent.metrics["n"] == sequential.metrics["n"]

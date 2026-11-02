@@ -51,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--value-samples", type=int, default=None, help="schema 里附带的低基数列取值样例数（0=关）"
     )
+    parser.add_argument("--concurrency", type=int, default=1, help="并发请求数，默认 1")
     parser.add_argument("--out", default=None, help="报告目录，默认 runs/")
     parser.add_argument("--no-save", action="store_true", help="不写报告文件")
     return parser
@@ -91,7 +92,13 @@ def main(argv: list[str] | None = None) -> int:
     report = (
         run_self_check(cases, args.db, settings=settings)
         if args.self_check
-        else run_eval(cases, args.db, settings=settings, dataset_name=dataset_name)
+        else run_eval(
+            cases,
+            args.db,
+            settings=settings,
+            dataset_name=dataset_name,
+            concurrency=args.concurrency,
+        )
     )
     print(format_summary(report))
 

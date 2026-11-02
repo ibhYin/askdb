@@ -9,6 +9,7 @@ import functools
 import json
 import math
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime
@@ -251,6 +252,7 @@ def run_eval(
     llm: BaseLLM | None = None,
     settings: Settings | None = None,
     dataset_name: str = "sample",
+    concurrency: int = 1,
 ) -> Report:
     settings = replace(settings or get_settings(), max_rows=EVAL_MAX_ROWS)
     llm = llm or build_llm(settings)
@@ -268,12 +270,33 @@ def run_eval(
             print(f"[跳过] {case.id} gold SQL 不可用：{exc}")
     cases = usable
 
-    print(f"开始评测（{len(cases)} 题，模型 {settings.model or 'mock'}）", flush=True)
-    results: list[CaseResult] = []
-    for index, case in enumerate(cases, 1):
-        results.append(run_case(case, db_path, llm, settings, gold_rows[case.id]))
-        if index % 25 == 0:
-            print(f"  … {index}/{len(cases)}", flush=True)
+    total = len(cases)
+    workers = max(1, concurrency)
+    print(
+        f"开始评测（{total} 题，模型 {settings.model or 'mock'}，并发 {workers}）",
+        flush=True,
+    )
+
+    results: list[CaseResult | None] = [None] * total
+    if workers == 1:
+        for index, case in enumerate(cases, 1):
+            results[index - 1] = run_case(case, db_path, llm, settings, gold_rows[case.id])
+            if index % 25 == 0:
+                print(f"  … {index}/{total}", flush=True)
+    else:
+        done = 0
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(run_case, case, db_path, llm, settings, gold_rows[case.id]): i
+                for i, case in enumerate(cases)
+            }
+            for future in as_completed(futures):
+                results[futures[future]] = future.result()
+                done += 1
+                if done % 25 == 0:
+                    print(f"  … {done}/{total}", flush=True)
+
+    results = [r for r in results if r is not None]
 
     report = Report(
         # 带微秒与数据集名：同一秒内跑多次也不会互相覆盖（覆盖 = 丢失基线）
@@ -292,6 +315,7 @@ def run_eval(
             "max_rows": settings.max_rows,
             "temperature": settings.temperature,
             "value_samples": settings.value_samples,
+            "concurrency": workers,
         },
         metrics=_aggregate(results),
         by_difficulty=_breakdown(results, lambda c: [c.difficulty]),
