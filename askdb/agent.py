@@ -13,22 +13,15 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Iterator
 from pathlib import Path
+from typing import Iterator
 
 from . import db as dbmod
+from . import prompts
 from .config import Settings, get_settings
 from .llm import BaseLLM, LLMError, LLMResponse, Message, build_llm
 
-SYSTEM_PROMPT = """你是一个严谨的数据分析助手，负责把用户的中文问题翻译成 SQLite 查询。
-
-规则：
-1. 只输出一条 SELECT 或 WITH 开头的查询，不要输出解释、不要用分号分隔多条语句。
-2. 只能使用下方 schema 中真实存在的表名和列名，不要臆造。
-3. 中文字符串值（如"已完成""手机"）要原样用于过滤条件。
-4. 需要排序、取前 N 条时，请加明确且唯一的排序键（并列时用第二列打破平局）。
-5. 如果上一次执行报错或结果为空，请阅读错误信息后修正 SQL 再输出。
-6. 输出格式：把 SQL 放在 ```sql 代码块中。"""
+SYSTEM_PROMPT = prompts.get_prompt()
 
 
 @dataclass
@@ -84,13 +77,20 @@ def extract_sql(text: str) -> str | None:
     return sql or None
 
 
-def build_messages(question: str, schema: str, evidence: str = "") -> list[Message]:
+def build_messages(
+    question: str,
+    schema: str,
+    evidence: str = "",
+    *,
+    prompt_version: str | None = None,
+) -> list[Message]:
     """evidence 是数据集给出的业务知识提示（BIRD 的标准字段），不是从库里能查到的东西。"""
     user = question
     if evidence:
         user = f"{question}\n\n参考信息：{evidence}"
+    system_prompt = prompts.get_prompt(prompt_version) if prompt_version else SYSTEM_PROMPT
     return [
-        Message("system", f"{SYSTEM_PROMPT}\n\n数据库 schema：\n{schema}"),
+        Message("system", f"{system_prompt}\n\n数据库 schema：\n{schema}"),
         Message("user", user),
     ]
 
@@ -103,6 +103,7 @@ def stream_agent(
     settings: Settings | None = None,
     schema: str | None = None,
     evidence: str = "",
+    prompt_version: str | None = None,
 ) -> Iterator[dict]:
     """流式版本：每走一步就吐一个事件，Web 端直接转成 SSE。
 
@@ -118,7 +119,7 @@ def stream_agent(
 
     conn = dbmod.open_db(db_path)
     schema = schema if schema is not None else dbmod.schema_text(conn)
-    messages = build_messages(question, schema, evidence)
+    messages = build_messages(question, schema, evidence, prompt_version=prompt_version)
 
     run = AgentRun(question=question)
     started = time.perf_counter()
@@ -207,10 +208,17 @@ def run_agent(
     settings: Settings | None = None,
     schema: str | None = None,
     evidence: str = "",
+    prompt_version: str | None = None,
 ) -> AgentRun:
     """同步版本：把事件流跑完，返回最终结果（评测用）。"""
     for event in stream_agent(
-        question, db_path, llm=llm, settings=settings, schema=schema, evidence=evidence
+        question,
+        db_path,
+        llm=llm,
+        settings=settings,
+        schema=schema,
+        evidence=evidence,
+        prompt_version=prompt_version,
     ):
         if event["type"] == "finish":
             return event["run"]

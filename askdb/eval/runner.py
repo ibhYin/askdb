@@ -153,6 +153,7 @@ def run_case(
             settings=settings,
             schema=schema_for_case(case, target_db, settings),
             evidence=case.evidence,
+            prompt_version=settings.prompt_version,
         )
         correct = run.ok and dbmod.results_equal(run.rows, gold_rows, ordered=case.ordered)
         category = classify(run, correct=correct)

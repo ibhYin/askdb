@@ -32,6 +32,7 @@ class Settings:
     schema_retrieval: bool = False
     schema_top_k: int = 6
     schema_hops: int = 1
+    prompt_version: str = "v2"
 
     @property
     def provider(self) -> str:
@@ -75,4 +76,5 @@ def get_settings() -> Settings:
         schema_retrieval=(os.getenv("SCHEMA_RETRIEVAL", "").strip().lower() in {"1", "true", "yes"}),
         schema_top_k=_env_int("SCHEMA_TOP_K", 6),
         schema_hops=_env_int("SCHEMA_HOPS", 1),
+        prompt_version=(os.getenv("PROMPT_VERSION") or "v2").strip().lower(),
     )

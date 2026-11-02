@@ -47,6 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="启用表级 schema 检索（只把相关表放进 prompt）",
     )
     parser.add_argument("--top-k", type=int, default=None, help="schema 检索保留的表数，默认 6")
+    parser.add_argument("--prompt", choices=["v1", "v2"], default=None, help="提示词版本，默认 v2")
     parser.add_argument("--out", default=None, help="报告目录，默认 runs/")
     parser.add_argument("--no-save", action="store_true", help="不写报告文件")
     return parser
@@ -77,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
         overrides["schema_retrieval"] = args.schema_retrieval
     if args.top_k is not None:
         overrides["schema_top_k"] = args.top_k
+    if args.prompt is not None:
+        overrides["prompt_version"] = args.prompt
     if overrides:
         settings = replace(settings, **overrides)
 
