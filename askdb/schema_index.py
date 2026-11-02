@@ -131,23 +131,39 @@ class SchemaIndex:
         matches.sort(key=lambda m: (-m.score, m.table))
         return matches[:top_k]
 
-    def search_with_neighbors(self, question: str, top_k: int = 6, hops: int = 1) -> list[str]:
-        """选中的表 + 它们的外键邻居：只给表不给连接路径，模型照样写不出 JOIN。"""
-        chosen = [m.table for m in self.search(question, top_k) if m.score > 0]
-        if not chosen:
-            chosen = [m.table for m in self.search(question, top_k)]
+    def search_with_neighbors(
+        self,
+        question: str,
+        top_k: int = 6,
+        hops: int = 1,
+        max_tables: int | None = None,
+    ) -> list[str]:
+        """选中的表 + 外键邻居：只给表不给连接路径，模型照样写不出 JOIN。
+
+        实测取舍（见 scripts/eval_retrieval.py）：
+        - 只补"自身也命中"的邻居 → 召回 93.3%，压缩更好
+        - 补全部外键邻居         → 召回 96.7%，压缩降到 24%
+        选召回：表没进 prompt，模型再强也写不出来；而 BIRD 的库本来就不大，
+        多给几张表的 token 代价远小于漏表的正确率代价。
+        """
+        ranked = self.search(question, top_k)
+        chosen = [m.table for m in ranked if m.score > 0] or [m.table for m in ranked]
+        cap = max_tables if max_tables is not None else len(self.docs)
 
         selected = list(chosen)
         for _ in range(hops):
-            additions: list[str] = []
             for table in list(selected):
+                if len(selected) >= cap:
+                    break
                 doc = self.docs.get(table)
                 if doc is None:
                     continue
                 for _, ref in doc.foreign_keys:
-                    if ref not in selected and ref not in additions:
-                        additions.append(ref)
-            selected.extend(additions)
+                    if len(selected) >= cap:
+                        break
+                    if ref in selected:
+                        continue
+                    selected.append(ref)
         return selected
 
 
