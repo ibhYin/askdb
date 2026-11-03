@@ -1,5 +1,7 @@
 # askdb — 自然语言问数 Agent（评测驱动）
 
+[![CI](https://github.com/ibhYin/askdb/actions/workflows/ci.yml/badge.svg)](https://github.com/ibhYin/askdb/actions/workflows/ci.yml)
+
 把中文问题变成 SQL、在真实数据库上执行、从报错里自己改过来。
 重点不是"能生成 SQL"，而是**每一点提升都有分数作证**。
 
