@@ -19,11 +19,12 @@ jobs:
       - name: 安装依赖
         run: pip install -r requirements.txt
 
-      - name: 单元测试
-        run: python -m pytest -q
-
+      # 样例库是可再生产物（.gitignore 里排除了 .db），测试依赖它，必须先建
       - name: 生成样例库
         run: python scripts/build_sample_db.py
+
+      - name: 单元测试
+        run: python -m pytest -q
 
       - name: 评测集体检
         run: python scripts/check_questions.py
